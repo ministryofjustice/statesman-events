@@ -1,6 +1,6 @@
 module Statesman
   class EventTransitions
-    attr_reader :machine, :event_name
+    attr_reader :machine, :event_name, :from, :to
 
     def initialize(machine, event_name, &block)
       @machine    = machine
@@ -9,14 +9,32 @@ module Statesman
     end
 
     def transition(from: nil, to: nil)
-      from = to_s_or_nil(from)
-      to = array_to_s_or_nil(to)
+      @from = to_s_or_nil(from)
+      @to = array_to_s_or_nil(to)
 
-      machine.transition(from: from, to: to)
+      machine.transition(from: @from, to: @to)
 
       machine.events[event_name] ||= {}
-      machine.events[event_name][from] ||= []
-      machine.events[event_name][from] += to
+      machine.events[event_name][@from] ||= []
+      machine.events[event_name][@from] += @to
+    end
+
+    def before(&block)
+      machine.before_transition(from: from, to: to) do |object, transition|
+        block.call(event_name, object, transition)
+      end
+    end
+
+    def after(&block)
+      machine.after_transition(from: from, to: to) do |object, transition|
+        block.call(event_name, object, transition)
+      end
+    end
+
+    def guard(&block)
+      machine.guard_transition(from: from, to: to) do |object, transition|
+        block.call(event_name, object, transition)
+      end
     end
 
     private
