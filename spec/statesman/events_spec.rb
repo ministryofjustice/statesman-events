@@ -57,6 +57,11 @@ describe Statesman::Events do
         event :event_2 do
           transition from: :y, to: :z
         end
+
+        event :event_3 do
+          guard { false }
+          transition from: :x, to: :y
+        end
       end
     end
 
@@ -131,6 +136,13 @@ describe Statesman::Events do
               to raise_error(Statesman::GuardFailedError)
           end
         end
+      end
+    end
+
+    context "when the state has a failing guard" do
+      it "raises an error" do
+        expect { instance.trigger!(:event_3) }.
+          to raise_error(Statesman::GuardFailedError)
       end
     end
   end

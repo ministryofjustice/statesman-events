@@ -12,7 +12,17 @@ module Statesman
 
     module ClassMethods
       def events
-        @events ||= {}
+        @events ||= Hash.new do |events, event_name|
+          events[event_name] = {
+            transitions: {},
+            callbacks: {
+              before: [],
+              after: [],
+              after_commit: [],
+              guards: [],
+            }
+          }
+        end
       end
 
       def event(name, &block)
@@ -21,7 +31,7 @@ module Statesman
     end
 
     def trigger!(event_name, metadata = {})
-      transitions = self.class.events.fetch(event_name) do
+      transitions = self.class.events.fetch(event_name).fetch(:transitions) do
         raise Statesman::TransitionFailedError,
               "Event #{event_name} not found"
       end
@@ -29,6 +39,14 @@ module Statesman
       new_state = transitions.fetch(current_state) do
         raise Statesman::TransitionFailedError,
               "State #{current_state} not found for Event #{event_name}"
+      end
+
+      guards_for_event(event_name).each do |guard|
+        unless guard.call(@object, last_transition, metadata)
+          raise GuardFailedError,
+                "Guard on event: #{event_name} with object: #{@object}" \
+                + " metadata: #{metadata} returned false"
+        end
       end
 
       transition_to!(new_state.first, metadata)
@@ -43,9 +61,19 @@ module Statesman
 
     def available_events
       state = current_state
-      self.class.events.select do |_, transitions|
-        transitions.key?(state)
+      self.class.events.select do |_, event|
+        event[:transitions].key?(state)
       end.map(&:first)
+    end
+
+    def guards_for_event(event_name)
+      self.class.events[event_name][:callbacks][:guards]
+    end
+
+    def can_trigger_event?(event_name, metadata = {})
+      guards_for_event(event_name).all? do |guard|
+        guard.call(@object, last_transition, metadata)
+      end
     end
   end
 end

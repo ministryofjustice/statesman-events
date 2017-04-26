@@ -5,28 +5,7 @@ module Statesman
     def initialize(machine, event_name, &block)
       @machine    = machine
       @event_name = event_name
-      @before_transitions = {}
-      @after_transitions  = {}
-      @guard_transitions  = {}
       instance_eval(&block)
-
-      all_transitions_matching(@before_transitions).each do |from, to, block|
-        machine.before_transition(from: from, to: to) do |object, transition, options|
-          block.call(object, transition, options)
-        end
-      end
-
-      all_transitions_matching(@after_transitions).each do |from, to, block|
-        machine.after_transition(from: from, to: to) do |object, transition, options|
-          block.call(object, transition, options)
-        end
-      end
-
-      all_transitions_matching(@guard_transitions).each do |from, to, block|
-        machine.guard_transition(from: from, to: to) do |object, transition, options|
-          block.call(object, transition, options)
-        end
-      end
     end
 
     def all_transitions_matching(transition_mappings)
@@ -59,27 +38,27 @@ module Statesman
 
       machine.transition(from: @from, to: @to)
 
-      machine.events[event_name] ||= {}
-      machine.events[event_name][@from] ||= []
-      machine.events[event_name][@from] += @to
+      machine.events[event_name][:transitions][@from] ||= []
+      machine.events[event_name][:transitions][@from] += @to
     end
 
-    def before(&block)
-      @before_transitions[[options[:from], options[:to]]] ||= []
-      @before_transitions[[options[:from], options[:to]]] << block
-    end
-
-    def after(options = {}, &block)
-      @after_transitions[[options[:from], options[:to]]] ||= []
-      @after_transitions[[options[:from], options[:to]]] << block
-    end
-
-    def guard(options = {}, &block)
-      @guard_transitions[[options[:from], options[:to]]] ||= []
-      @guard_transitions[[options[:from], options[:to]]] << block
+    def guard(&block)
+      add_callback(callback_type: :guards, &block)
     end
 
     private
+
+    def add_callback(callback_type: nil, &block)
+      validate_callback_type_and_class(callback_type)
+
+      machine.events[event_name][:callbacks][callback_type] << block
+    end
+
+    def validate_callback_type_and_class(callback_type)
+      if callback_type.nil?
+        raise ArgumentError.new("missing keyword: callback_type")
+      end
+    end
 
     def to_s_or_nil(input)
       input.nil? ? input : input.to_s
